@@ -304,6 +304,8 @@ const emptyUserProfile: UserProfile = {
   cvLoaded: false,
 };
 
+const sampleCvText = "Alex Kim | Commerce student interested in product strategy and fintech. Product Strategy Intern at Northstar Labs: supported competitor research, product analytics, and cross-functional launch planning. BCom, Management & Technology, University of Toronto. Interested in Product Analyst, Associate Product Manager, and Fintech Strategy roles.";
+
 const sampleUserProfile: UserProfile = {
   name: "Alex Kim",
   headline: "Commerce student interested in product strategy and fintech",
@@ -354,7 +356,7 @@ function ProfileSetup({
             <h1>Tell us about your background</h1>
             <p>Your profile and CV help Connectly find credible shared context before it recommends anyone.</p>
           </div>
-          <Button className="secondary-button sample-data-button" onClick={() => setProfile(sampleUserProfile)}>
+          <Button className="secondary-button sample-data-button" onClick={() => { setProfile(sampleUserProfile); setCvText(sampleCvText); setCvFileName("Alex_Kim_Sample_CV.pdf"); setCvError(""); }}>
             <Icon name="sparkle" size={15} /> Use sample Alex Kim data
           </Button>
         </section>
@@ -480,6 +482,42 @@ async function parsePdfText(file: File): Promise<string> {
   return pages.join("\n").replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
 }
 
+function cleanCandidateDetail(candidate: CandidateEntry): string {
+  const detail = (candidate.detail || "").replace(/^parsed profile\s*[·:–-]\s*/i, "").trim();
+  if (detail && !/^(profile text ready for matching|profile imported from pdf)$/i.test(detail)) return detail;
+  const text = (candidate.profileText || "").replace(/\s+/g, " ").trim();
+  if (!text) return "your work in this area";
+  const sentence = text.split(/(?<=[.!?])\s+/)[0];
+  return sentence.length > 95 ? `${sentence.slice(0, 92).trim()}…` : sentence;
+}
+
+function buildGoalQuestion(support: string, targetRoles: string, goalFocus: string): string {
+  const raw = support.trim().replace(/[“”]/g, "").replace(/[.?!]+$/, "");
+  const normalized = raw.toLowerCase();
+  if (!raw) return `What would you recommend someone exploring ${targetRoles || goalFocus} focus on first?`;
+  if (/hiring manager/.test(normalized) && /(think|look|expect|evaluat)/.test(normalized)) {
+    return `When hiring for ${targetRoles || "early-career roles"}, what signals make a candidate stand out?`;
+  }
+  if (/^(learn|understand|find out|know)\s+(what|how|why|whether)\s+/i.test(raw)) {
+    const topic = raw.replace(/^(learn|understand|find out|know)\s+/i, "");
+    return `I’d love to understand ${topic.charAt(0).toLowerCase()}${topic.slice(1)}. What has your experience taught you about it?`;
+  }
+  if (/^(learn|understand|explore|know more about)\s+/i.test(raw)) {
+    const topic = raw.replace(/^(learn|understand|explore|know more about)\s+/i, "");
+    return `I’d love to hear your perspective on ${topic}. What would be useful for someone exploring ${targetRoles || goalFocus} to know?`;
+  }
+  return `I’m hoping to learn about ${raw.charAt(0).toLowerCase()}${raw.slice(1)}. What advice would you give someone exploring ${targetRoles || goalFocus}?`;
+}
+
+function summarizeUserContext(profile: UserProfile | null, cvText: string): string {
+  if (!profile) return "my background and current career interests";
+  const structured = [profile.headline, profile.experience, profile.program && `${profile.program} at ${profile.school}`]
+    .map((part) => part.trim()).filter(Boolean);
+  if (structured.length) return structured.slice(0, 2).join("; ");
+  const firstUsefulLine = cvText.split(/\n+/).map((line) => line.trim()).find((line) => line.length > 25);
+  return firstUsefulLine || "my background and current career interests";
+}
+
 function scoreCandidate(candidate: CandidateEntry, goalText: string, cvText: string): number {
   const stopWords = new Set(["the", "and", "for", "with", "from", "that", "this", "your", "you", "into", "are", "who", "what", "how", "their", "have", "has", "was", "were", "will", "can", "our", "they", "but", "not", "about", "role", "work", "experience"]);
   const tokens = (value: string) => value.toLowerCase().match(/[a-z0-9+#.-]{2,}/g)?.filter((word) => !stopWords.has(word)) ?? [];
@@ -527,11 +565,11 @@ const sampleCandidates: CandidateEntry[] = [
   { id: "al-5", name: "Rohan Mehta", role: "Product Analyst at Wealthsimple", detail: "U of T alum · First-time investor activation", source: "Opt-in alumni" },
   { id: "al-6", name: "Claire Dubois", role: "Service Designer at RBC", detail: "U of T alum · Newcomer banking onboarding", source: "Opt-in alumni" },
   { id: "al-7", name: "Nadia Rahman", role: "Fintech Product Designer at Microsoft", detail: "U of T alum · Identity and trust experiences", source: "Opt-in alumni" },
-  { id: "pdf-1", name: "Jordan Lee", role: "Associate Product Manager at Block", detail: "Parsed profile · New-grad fintech product path", source: "PDF Upload" },
-  { id: "pdf-2", name: "Anika Shah", role: "Product Operations at PayPal", detail: "Parsed profile · Moved from commerce into product", source: "PDF Upload" },
-  { id: "pdf-3", name: "Michael Tran", role: "Fintech Strategy Associate at Deloitte", detail: "Parsed profile · Neobank market strategy", source: "PDF Upload" },
-  { id: "pdf-4", name: "Fatima Noor", role: "Product Analyst at Interac", detail: "Parsed profile · KYC funnel analytics", source: "PDF Upload" },
-  { id: "pdf-5", name: "Lucas Martin", role: "APM at Shopify", detail: "Parsed profile · International graduate hiring journey", source: "PDF Upload" },
+  { id: "pdf-1", name: "Jordan Lee", role: "Associate Product Manager at Block", detail: "Early-career product management in fintech", source: "PDF Upload", profileText: "Associate Product Manager at Block focused on fintech product launches, customer discovery, product analytics, and improving payment experiences for new users." },
+  { id: "pdf-2", name: "Anika Shah", role: "Product Operations at PayPal", detail: "Transitioned from commerce into product operations", source: "PDF Upload", profileText: "Product operations professional at PayPal who moved from commerce into product. Works on cross-functional launches, user feedback, and improving product team workflows." },
+  { id: "pdf-3", name: "Michael Tran", role: "Fintech Strategy Associate at Deloitte", detail: "Fintech and neobank market strategy", source: "PDF Upload", profileText: "Fintech strategy associate at Deloitte researching neobank business models, market entry, competitive positioning, and digital banking customer needs." },
+  { id: "pdf-4", name: "Fatima Noor", role: "Product Analyst at Interac", detail: "Product analytics for onboarding and KYC", source: "PDF Upload", profileText: "Product analyst at Interac focused on onboarding funnels, KYC completion, customer drop-off analysis, and using data to improve digital payment experiences." },
+  { id: "pdf-5", name: "Lucas Martin", role: "APM at Shopify", detail: "Early-career product path and international hiring", source: "PDF Upload", profileText: "Associate product manager at Shopify with experience in international customer journeys, product discovery, experimentation, and navigating early-career hiring." },
 ];
 
 function CandidatePoolSetup({
@@ -1275,9 +1313,13 @@ export default function App() {
     return candidatePool.slice(0, 5).map((candidate, index) => {
       const firstName = candidate.name.split(/\s+/)[0] || candidate.name;
       const sourceLabel = candidate.source === "PDF Upload" ? "PDF Upload" : candidate.source;
-      const evidence = candidate.profileText || candidate.detail;
-      const messageOne = `Hi ${firstName}, I’m exploring ${userProfile?.targetRoles || goalProfile?.focus || "my next career step"}. Your experience in ${candidate.role} caught my attention, especially ${candidate.detail}. I’d value your perspective on ${goalProfile?.support || "how you approached this work"}. Would you be open to a brief 15-minute conversation?`;
-      const messageTwo = `Hi ${firstName}, I came across your profile while learning more about ${goalProfile?.focus || "career paths"}. My background includes ${userProfile?.experience || "recent academic and project work"}, and I’m interested in how that connects with your work in ${candidate.role}. Could I ask you a few questions in a short chat?`;
+      const evidence = cleanCandidateDetail(candidate);
+      const goalQuestion = buildGoalQuestion(goalProfile?.support || "", userProfile?.targetRoles || "", goalProfile?.focus || "my career goals");
+      const userContext = summarizeUserContext(userProfile, userCvText);
+      const conciseEvidence = evidence.length > 95 ? `${evidence.slice(0, 92).trim()}…` : evidence;
+      const conciseContext = userContext.length > 100 ? `${userContext.slice(0, 97).trim()}…` : userContext;
+      const messageOne = `Hi ${firstName}, I’m exploring ${userProfile?.targetRoles || goalProfile?.focus || "my next career step"}. Your work as ${candidate.role}, especially ${conciseEvidence}, caught my attention. ${goalQuestion} Would you be open to a 15-minute chat?`;
+      const messageTwo = `Hi ${firstName}, I’m learning more about ${goalProfile?.focus || "career paths"}. My background is in ${conciseContext}, and I’m exploring ${userProfile?.targetRoles || goalProfile?.focus || "this field"}. Could I ask you a few questions in a short chat?`;
       return {
         id: index + 1,
         name: candidate.name,
@@ -1286,10 +1328,10 @@ export default function App() {
         match: candidate.score ?? 75,
         mutual: 0,
         reason: `${sourceLabel} · Goal relevance`,
-        why: candidate.detail || `Relevant to ${goalProfile?.focus || "your goal"}`,
-        profileDetail: evidence.slice(0, 260),
-        yourConnection: userCvText ? `Your CV context: ${userCvText.slice(0, 260)}` : `Your target roles: ${userProfile?.targetRoles || "career exploration"}`,
-        ask: goalProfile?.support || `What advice would you give someone exploring ${userProfile?.targetRoles || "this field"}?`,
+        why: evidence || `Relevant to ${goalProfile?.focus || "your goal"}`,
+        profileDetail: (candidate.profileText || evidence).replace(/^parsed profile\s*[·:–-]\s*/i, "").slice(0, 260),
+        yourConnection: summarizeUserContext(userProfile, userCvText),
+        ask: goalQuestion,
         messages: [messageOne, messageTwo],
         image: discoveryContacts[index % discoveryContacts.length].image,
       };
